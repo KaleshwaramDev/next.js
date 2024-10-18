@@ -18,10 +18,11 @@ pub async fn directory_from_relative_path(
 }
 
 pub fn directory_from_include_dir(
+    uri_scheme: RcStr,
     name: RcStr,
     dir: &'static include_dir::Dir<'static>,
 ) -> Vc<Box<dyn FileSystem>> {
-    Vc::upcast(EmbeddedFileSystem::new(name, dir))
+    Vc::upcast(EmbeddedFileSystem::new(uri_scheme, name, dir))
 }
 
 /// Returns an embedded [Vc<Box<dyn FileSystem>>] for the given path.
@@ -37,12 +38,12 @@ pub fn directory_from_include_dir(
 /// only the directory path will be embedded into the binary.
 #[macro_export]
 macro_rules! embed_directory {
-    ($name:tt, $path:tt) => {{        // make sure the path contains `$CARGO_MANIFEST_DIR`
+    ($uri_scheme:tt, $name:tt, $path:tt) => {{        // make sure the path contains `$CARGO_MANIFEST_DIR`
         assert!($path.contains("$CARGO_MANIFEST_DIR"));
         // make sure `CARGO_MANIFEST_DIR` is the only env variable in the path
         assert!(!$path.replace("$CARGO_MANIFEST_DIR", "").contains('$'));
 
-        turbo_tasks_fs::embed_directory_internal!($name, $path)
+        turbo_tasks_fs::embed_directory_internal!($uri_scheme, $name, $path)
     }};
 }
 
@@ -50,13 +51,17 @@ macro_rules! embed_directory {
 #[macro_export]
 #[doc(hidden)]
 macro_rules! embed_directory_internal {
-    ($name:tt, $path:tt) => {{
+    ($uri_scheme:tt, $name:tt, $path:tt) => {{
         // make sure the types the `include_dir!` proc macro refers to are in scope
         use turbo_tasks_fs::embed::include_dir;
 
         let path = $path.replace("$CARGO_MANIFEST_DIR", env!("CARGO_MANIFEST_DIR"));
 
-        turbo_tasks_fs::embed::directory_from_relative_path($name.to_string(), path)
+        turbo_tasks_fs::embed::directory_from_relative_path(
+            $uri_scheme.into(),
+            $name.to_string(),
+            path,
+        )
     }};
 }
 
@@ -64,12 +69,12 @@ macro_rules! embed_directory_internal {
 #[macro_export]
 #[doc(hidden)]
 macro_rules! embed_directory_internal {
-    ($name:tt, $path:tt) => {{
+    ($uri_scheme:tt, $name:tt, $path:tt) => {{
         // make sure the types the `include_dir!` proc macro refers to are in scope
         use turbo_tasks_fs::embed::include_dir;
 
         static dir: include_dir::Dir<'static> = turbo_tasks_fs::embed::include_dir!($path);
 
-        turbo_tasks_fs::embed::directory_from_include_dir($name.into(), &dir)
+        turbo_tasks_fs::embed::directory_from_include_dir($uri_scheme.into(), $name.into(), &dir)
     }};
 }

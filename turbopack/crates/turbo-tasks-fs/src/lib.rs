@@ -193,6 +193,9 @@ pub trait FileSystem: ValueToString {
         target: Vc<LinkContent>,
     ) -> Vc<Completion>;
     fn metadata(self: Vc<Self>, fs_path: Vc<FileSystemPath>) -> Vc<FileMeta>;
+    fn file_uri(self: Vc<Self>, _fs_path: Vc<FileSystemPath>) -> Vc<RcStr> {
+        unimplemented!();
+    }
 }
 
 #[turbo_tasks::value(cell = "new", eq = "manual")]
@@ -886,6 +889,14 @@ impl FileSystem for DiskFileSystem {
 
         Ok(FileMeta::cell(meta.into()))
     }
+
+    #[turbo_tasks::function(fs)]
+    async fn file_uri(&self, fs_path: Vc<FileSystemPath>) -> Result<Vc<RcStr>> {
+        Ok(Vc::cell(RcStr::from(format!(
+            "file://{}",
+            sys_to_unix(&self.to_sys_path(fs_path).await?.to_string_lossy())
+        ))))
+    }
 }
 
 #[turbo_tasks::value_impl]
@@ -1300,6 +1311,12 @@ impl FileSystemPath {
             Cow::Borrowed(_) => self,
             Cow::Owned(path) => path.cell(),
         })
+    }
+
+    #[turbo_tasks::function]
+    pub async fn uri(self: Vc<Self>) -> Result<Vc<RcStr>> {
+        let this = self.await?;
+        Ok(this.fs.file_uri(self))
     }
 }
 
